@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8" />
+    <title>轻量级摄像头播放界面</title>
+    <style>
+        #deviceList {
+            width: 200px;
+            height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            float: left;
+        }
+        #videoContainer {
+            margin-left: 210px;
+            display: flex;
+            gap: 10px;
+        }
+        video {
+            width: 320px;
+            height: 240px;
+            background: black;
+        }
+    </style>
+</head>
+<body>
+
+<button id="loginBtn">登录获取Token</button>
+<div id="tokenDisplay"></div>
+
+<h3>摄像头设备列表</h3>
+<div id="deviceList"></div>
+
+<h3>分屏播放</h3>
+<div id="videoContainer">
+    <video id="video1" controls muted></video>
+    <video id="video2" controls muted></video>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/flv.js@latest/dist/flv.min.js"></script>
+<script>
+    let token = '';
+    let devices = [];
+
+    // 1. 登录并获取token
+    document.getElementById('loginBtn').onclick = async () => {
+        try {
+            const res = await fetch('https://api.livegbs.com/login', {  // 替换成官方登录接口
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({username: '你的用户名', password: '你的密码'})
+            });
+            const data = await res.json();
+            token = data.token;
+            document.getElementById('tokenDisplay').innerText = 'Token: ' + token;
+            fetchDevices();
+        } catch (e) {
+            alert('登录失败: ' + e.message);
+        }
+    };
+
+    // 2. 获取摄像头设备树
+    async function fetchDevices() {
+        const res = await fetch('https://api.livegbs.com/devices', { // 替换成官方获取设备接口
+            headers: {
+                'Authorization': 'Bearer ' + token
+            }
+        });
+        const data = await res.json();
+        devices = data.devices; // 假设返回结构是 { devices: [...] }
+        renderDeviceList();
+    }
+
+    // 3. 渲染设备列表
+    function renderDeviceList() {
+        const container = document.getElementById('deviceList');
+        container.innerHTML = '';
+        devices.forEach(device => {
+            const div = document.createElement('div');
+            div.innerText = device.name;
+            div.style.cursor = 'pointer';
+            div.onclick = () => startPlay(device.streamUrl, div);
+            container.appendChild(div);
+        });
+    }
+
+    // 4. 播放选中摄像头到分屏
+    let currentVideoIndex = 0;
+    function startPlay(url, dom) {
+        // 简单轮流给两个视频窗口播放
+        const videoId = 'video' + (currentVideoIndex + 1);
+        currentVideoIndex = (currentVideoIndex + 1) % 2;
+        playFLV(url, document.getElementById(videoId));
+    }
+
+    // 5. 使用flv.js播放flv流
+    function playFLV(url, videoElement) {
+        if (flvjs.isSupported()) {
+            if (videoElement.flvPlayer) {
+                videoElement.flvPlayer.unload();
+                videoElement.flvPlayer.detachMediaElement();
+                videoElement.flvPlayer.destroy();
+            }
+            const flvPlayer = flvjs.createPlayer({
+                type: 'flv',
+                url: url
+            });
+            flvPlayer.attachMediaElement(videoElement);
+            flvPlayer.load();
+            flvPlayer.play();
+            videoElement.flvPlayer = flvPlayer;
+        } else {
+            alert('FLV.js 不支持当前浏览器');
+        }
+    }
+</script>
+</body>
+</html>

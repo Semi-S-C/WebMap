@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <title>LiveGBS 摄像头弹窗播放</title>
+    <script src="https://cdn.jsdelivr.net/npm/flv.js@1.6.2/dist/flv.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/blueimp-md5/js/md5.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f0f0f0;
+        }
+
+        button {
+            margin: 5px;
+            padding: 6px 12px;
+            font-size: 14px;
+        }
+
+        /* 弹窗样式 */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0; top: 0;
+            width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+        }
+
+        .modal-content {
+            background: #fff;
+            margin: 10% auto;
+            padding: 10px;
+            width: 90%;
+            max-width: 800px;
+            border-radius: 8px;
+            position: relative;
+        }
+
+        #video {
+            width: 100%;
+            height: 450px;
+            background: black;
+        }
+
+        .close-btn {
+            position: absolute;
+            right: 10px;
+            top: 10px;
+            font-size: 18px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+<h2>LiveGBS 摄像头弹窗播放</h2>
+
+<button onclick="login()">登录系统</button>
+
+<div id="device-buttons"></div>
+
+<!-- 弹窗 -->
+<div id="videoModal" class="modal">
+    <div class="modal-content">
+        <span class="close-btn" onclick="closeModal()">&times;</span>
+        <video id="video" controls autoplay muted></video>
+    </div>
+</div>
+
+<script>
+    const serverIP = "192.168.3.212";
+    const serverPort = "10000";
+    const username = "admin";
+    const password = "admin@2024";
+    let currentToken = null;
+
+    async function login() {
+        const passwordMd5 = md5(password);
+        const loginResp = await fetch(`http://${serverIP}:${serverPort}/api/v1/login`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                username,
+                password: passwordMd5,
+                url_token_only: true
+            })
+        });
+
+        const loginData = await loginResp.json();
+        console.log("登录响应：", loginData);
+
+        if (!loginData.URLToken) {
+            alert("登录失败");
+            return;
+        }
+
+        currentToken = loginData.URLToken;
+
+        alert("登录成功！");
+        renderDeviceButtons();
+    }
+
+    function renderDeviceButtons() {
+        // 假设有以下设备 ID，可改为从接口动态获取
+        const deviceList = [
+            { id: "34020000001320000001", name: "摄像头 A" },
+            { id: "34020000001320000002", name: "摄像头 B" },
+            { id: "34020000001320000003", name: "摄像头 C" }
+        ];
+
+        const container = document.getElementById("device-buttons");
+        container.innerHTML = "";
+
+        deviceList.forEach(device => {
+            const btn = document.createElement("button");
+            btn.textContent = `查看 ${device.name}`;
+            btn.onclick = () => playDevice(device.id);
+            container.appendChild(btn);
+        });
+    }
+
+    async function playDevice(deviceId) {
+        if (!currentToken) {
+            alert("请先登录！");
+            return;
+        }
+
+        const serial = "34020000001320000065";  // 根据实际情况替换
+        const streamResp = await fetch(`http://${serverIP}:${serverPort}/api/v1/stream/start?serial=${serial}&code=${deviceId}&channel=1&token=${currentToken}`);
+        const streamData = await streamResp.json();
+
+        console.log("流地址响应：", streamData);
+
+        if (!streamData || !streamData.WS_FLV) {
+            alert("未获取到该设备的视频地址");
+            return;
+        }
+
+        const flvUrl = streamData.WS_FLV + `?token=${currentToken}`;
+        openModalWithVideo(flvUrl);
+    }
+
+    function openModalWithVideo(flvUrl) {
+        const videoElement = document.getElementById("video");
+        if (window.flvPlayer) {
+            window.flvPlayer.destroy();
+        }
+        window.flvPlayer = flvjs.createPlayer({
+            type: "flv",
+            url: flvUrl
+        });
+        window.flvPlayer.attachMediaElement(videoElement);
+        window.flvPlayer.load();
+        window.flvPlayer.play();
+
+        document.getElementById("videoModal").style.display = "block";
+    }
+
+    function closeModal() {
+        document.getElementById("videoModal").style.display = "none";
+        if (window.flvPlayer) {
+            window.flvPlayer.pause();
+            window.flvPlayer.destroy();
+        }
+    }
+</script>
+
+</body>
+</html>

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <title>海康摄像头WebSocket播放示例</title>
+    <style>
+        #video-container {
+            width: 640px;
+            height: 360px;
+            background: black;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            overflow: hidden;
+            position: relative;
+        }
+    </style>
+</head>
+<body>
+
+<h2>海康摄像头直播（WebSocket方式）</h2>
+<div id="video-container"></div>
+
+<!-- 引入海康官方Web SDK -->
+<script src="hikvision-websdk.js"></script>
+
+<script>
+    // 等SDK加载完成后执行
+    window.onload = function() {
+        try {
+            const player = new HikvisionPlayer({
+                websocketUrl: "ws://192.168.1.65:7681",
+                username: "admin",
+                password: "Tiexiang",
+                channel: 1,
+                streamType: 1 // 1主码流，2子码流
+            });
+
+            // 把视频渲染到这个DOM容器里，SDK一般会创建canvas或video标签
+            player.attachTo(document.getElementById('video-container'));
+
+            // 启动播放
+            player.start();
+
+            // 可选事件监听
+            player.on('error', (err) => {
+                console.error('播放错误:', err);
+                alert('播放失败，请检查网络或认证');
+            });
+        } catch(e) {
+            console.error('初始化失败:', e);
+            alert('SDK初始化异常');
+        }
+    }
+</script>
+
+</body>
+</html>

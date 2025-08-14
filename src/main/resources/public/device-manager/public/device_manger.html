@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <title>设备管理系统</title>
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            font-family: Arial, sans-serif;
+            height: 100vh;
+        }
+        .sidebar {
+            width: 210px;
+            background-color: #2c3e50;
+            color: #ecf0f1;
+            overflow-y: auto;
+            padding: 16px;
+        }
+        .sidebar h2 {
+            font-size: 18px;
+            margin-bottom: 16px;
+            border-bottom: 1px solid #444;
+            padding-bottom: 8px;
+        }
+        .mileage {
+            font-weight: bold;
+            margin: 8px 0;
+            cursor: pointer;
+        }
+        .stations {
+            margin-left: 20px;
+            display: none;
+            font-size: 14px;
+        }
+        .station {
+            margin: 4px 0;
+            cursor: pointer;
+            position: relative;
+        }
+        .devices {
+            display: none;
+        }
+        .device {
+            margin: 2px 0;
+            padding-left: 16px;
+            position: relative;
+            cursor: default;
+        }
+        .main {
+            flex: 1;
+            padding: 24px;
+            background-color: #f4f4f4;
+            position: relative;
+        }
+        .add-button {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            padding: 10px 16px;
+            background-color: #1abc9c;
+            color: #fff;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            border-radius: 4px;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+        .modal-content {
+            background-color: #fff;
+            margin: 100px auto;
+            padding: 20px;
+            border-radius: 6px;
+            width: 400px;
+            box-sizing: border-box;
+        }
+        .modal-content h3 {
+            margin-top: 0;
+        }
+        .modal-content input {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 12px;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+        .modal-content button {
+            padding: 8px 14px;
+            margin-right: 10px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+<div class="sidebar">
+    <h2>设备管理</h2>
+    <div id="sidebarContent">加载中...</div>
+</div>
+
+<div class="main">
+    <button class="add-button" onclick="openModal()">➕ 添加设备</button>
+    <h1>欢迎使用设备管理系统</h1>
+    <p>请点击左侧观测点以查看设备详情。</p>
+</div>
+
+<!-- 弹窗：添加设备 -->
+<div id="deviceModal" class="modal">
+    <div class="modal-content">
+        <h3>添加新设备</h3>
+        <input type="text" id="mileageInput" placeholder="大里程（如 K60）" />
+        <input type="text" id="subMileageInput" placeholder="小里程（如 770）" />
+        <input type="text" id="stationNameInput" placeholder="观测点名称（如 三甲隧道北头）" />
+        <input type="text" id="deviceIdInput" placeholder="设备 ID（如 video0001）" />
+        <input type="text" id="deviceTypeInput" placeholder="设备类型（如 摄像头）" />
+        <div style="text-align: right;">
+            <button onclick="submitDevice()">添加</button>
+            <button onclick="closeModal()">取消</button>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
+
+<script>
+    const csvUrl = 'http://192.168.0.19:8002/device.csv';
+    let devices = [];
+    let groupedData = {};
+
+    function groupForSidebar(devices) {
+        const grouped = {};
+        devices.forEach(({ 大里程, 小里程, 观测点名称, 设备ID }) => {
+            if (!大里程 || !小里程 || !观测点名称 || !设备ID) return; // 跳过无效数据
+
+            // 统一大里程格式，去掉多余空格，转成大写
+            const mileage = 大里程.trim().toUpperCase();
+
+            // 统一小里程和观测点名称格式
+            const subMileage = 小里程.trim();
+            const stationName = 观测点名称.trim();
+
+            // 组装站点标签
+            const stationLabel = `${stationName} (${mileage}+${subMileage})`;
+
+            if (!grouped[mileage]) grouped[mileage] = {};
+            if (!grouped[mileage][stationLabel]) grouped[mileage][stationLabel] = [];
+
+            grouped[mileage][stationLabel].push(设备ID.trim());
+        });
+        return grouped;
+    }
+
+    function customSort(arr) {
+        return arr.sort((a, b) => {
+            // 去除“K”后转数字比较
+            const numA = parseInt(a.replace(/^[^\d]*/, ''), 10);
+            const numB = parseInt(b.replace(/^[^\d]*/, ''), 10);
+            return numA - numB;
+        });
+    }
+
+    function parseStationLabel(label) {
+        const regex = /^(.*) \(([A-Za-z]+\d+)\+(\d+)\)$/;
+        const match = label.match(regex);
+        if (!match) return { stationName: label, mileagePrefix: '', subMileage: 0 };
+        return {
+            stationName: match[1],
+            mileagePrefix: match[2],
+            subMileage: parseInt(match[3], 10)
+        };
+    }
+
+    function renderSidebar(data) {
+        const container = document.getElementById('sidebarContent');
+        container.innerHTML = '';
+        if (!data || Object.keys(data).length === 0) {
+            container.textContent = '暂无设备数据。';
+            return;
+        }
+
+        const sortedMileages = customSort(Object.keys(data));
+
+        sortedMileages.forEach(mileage => {
+            const mileageDiv = document.createElement('div');
+            mileageDiv.textContent = `- ${mileage}`;
+            mileageDiv.className = 'mileage';
+
+            const stationsWrapper = document.createElement('div');
+            stationsWrapper.className = 'stations';
+
+            mileageDiv.onclick = () => {
+                stationsWrapper.style.display = stationsWrapper.style.display === 'block' ? 'none' : 'block';
+            };
+
+            const stationLabels = Object.keys(data[mileage]);
+            stationLabels.sort((a, b) => {
+                const aInfo = parseStationLabel(a);
+                const bInfo = parseStationLabel(b);
+
+                console.log('比较站点:', a, aInfo, b, bInfo);
+
+                if (aInfo.subMileage !== bInfo.subMileage) {
+                    return aInfo.subMileage - bInfo.subMileage;
+                }
+                return aInfo.stationName.localeCompare(bInfo.stationName);
+            });
+
+            stationLabels.forEach(stationName => {
+                const stationDiv = document.createElement('div');
+                stationDiv.textContent = stationName;
+                stationDiv.className = 'station';
+
+                const deviceList = document.createElement('div');
+                deviceList.className = 'devices';
+
+                stationDiv.onclick = () => {
+                    deviceList.style.display = deviceList.style.display === 'block' ? 'none' : 'block';
+                };
+
+                data[mileage][stationName].forEach(deviceID => {
+                    const deviceDiv = document.createElement('div');
+                    deviceDiv.className = 'device';
+                    deviceDiv.textContent = deviceID;
+                    deviceList.appendChild(deviceDiv);
+                });
+
+                stationsWrapper.appendChild(stationDiv);
+                stationsWrapper.appendChild(deviceList);
+            });
+
+            container.appendChild(mileageDiv);
+            container.appendChild(stationsWrapper);
+        });
+    }
+
+
+
+    function openModal() {
+        document.getElementById('deviceModal').style.display = 'block';
+    }
+
+    function closeModal() {
+        document.getElementById('deviceModal').style.display = 'none';
+        ['mileageInput', 'subMileageInput', 'stationNameInput', 'deviceIdInput', 'deviceTypeInput']
+            .forEach(id => document.getElementById(id).value = '');
+    }
+
+    function submitDevice() {
+        const mileage = document.getElementById('mileageInput').value.trim();
+        const subMileage = document.getElementById('subMileageInput').value.trim();
+        const stationName = document.getElementById('stationNameInput').value.trim();
+        const deviceId = document.getElementById('deviceIdInput').value.trim();
+        const deviceType = document.getElementById('deviceTypeInput').value.trim();
+
+        if (!mileage || !subMileage || !stationName || !deviceId || !deviceType) {
+            alert('请填写所有信息');
+            return;
+        }
+
+        fetch('http://192.168.0.19:8002/add-device', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                大里程: mileage,
+                小里程: subMileage,
+                观测点名称: stationName,
+                设备ID: deviceId,
+                设备类型: deviceType
+            })
+        })
+            .then(res => res.json())
+            .then(data => {
+                if (data.error) {
+                    alert('添加失败: ' + data.error);
+                } else {
+                    alert('添加成功');
+                    closeModal();
+                    loadDeviceSidebar();  // ✅ 添加后刷新列表
+                }
+            })
+            .catch(err => {
+                alert('网络错误，添加失败');
+                console.error(err);
+            });
+    }
+
+    // ✅ 封装加载 CSV 的函数
+    function loadDeviceSidebar() {
+        fetch(csvUrl)
+            .then(response => {
+                if (!response.ok) throw new Error('网络响应失败');
+                return response.text();
+            })
+            .then(csvText => {
+                const results = Papa.parse(csvText, {
+                    header: true,
+                    skipEmptyLines: true,
+                });
+                devices = results.data;
+                groupedData = groupForSidebar(devices);
+                renderSidebar(groupedData);
+            })
+            .catch(error => {
+                console.error('读取或解析 CSV 出错:', error);
+                document.getElementById('sidebarContent').textContent = '加载设备数据失败';
+            });
+    }
+
+    // ✅ 页面加载时调用
+    loadDeviceSidebar();
+</script>
+
+</body>
+</html>

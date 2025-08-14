@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>地质沉降折线图</title>
+</head>
+<body>
+<h2 style="text-align:center;">地质沉降变化趋势图</h2>
+<canvas id="lineChart" width="600" height="400" style="display:block; margin:auto;"></canvas>
+
+<!-- 引入 Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+    const ctx = document.getElementById('lineChart').getContext('2d');
+    const chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: ['7-20', '7-21', '7-22', '7-23'],
+            datasets: [{
+                label: '地质沉降（mm）',
+                data: [0, -0.5, -1.1, -1.8],
+                borderColor: 'blue',
+                borderWidth: 2,
+                fill: false
+            }]
+        },
+        options: {
+            scales: {
+                x: { title: { display: true, text: '日期' }},
+                y: { title: { display: true, text: '沉降量（mm）' } }
+            }
+        }
+    });
+</script>
+</body>
+</html>

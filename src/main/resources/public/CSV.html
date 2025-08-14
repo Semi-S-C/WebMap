@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>读取 CSV 并解析示范</title>
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+</head>
+<body>
+<h2>设备列表</h2>
+<pre id="output"></pre>
+
+<script>
+    // CSV 文件 URL，假设你用http服务放在localhost:8000根目录，文件名devices.csv
+    const csvUrl = 'http://localhost:8002/device.csv';
+
+    fetch(csvUrl)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('网络响应失败');
+            }
+            return response.text();
+        })
+        .then(csvText => {
+            // 解析CSV文本
+            const results = Papa.parse(csvText, {
+                header: true,     // 第一行为表头
+                skipEmptyLines: true
+            });
+
+            // 打印解析结果
+            console.log(results.data);
+
+            // 这里简单示范输出到页面
+            const output = document.getElementById('output');
+            output.textContent = JSON.stringify(results.data, null, 2);
+
+            // 你可以基于 results.data 构建你的侧边栏结构
+        })
+        .catch(error => {
+            console.error('读取或解析 CSV 出错:', error);
+        });
+</script>
+</body>
+</html>

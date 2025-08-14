@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8" />
+    <title>主页</title>
+    <link
+            rel="stylesheet"
+            href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    />
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body, html {
+            margin: 0; padding: 0; height: 100vh; font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+        }
+        #container {
+            display: flex;
+            height: 100vh;
+            width: 100vw;
+        }
+        /* 左侧导航栏 */
+        #sidebar {
+            width: 130px;
+            background-color: #0d1b2a;
+            color: white;
+            transition: width 0.3s ease;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #sidebar.collapsed {
+            width: 50px; /* 统一折叠宽度 */
+        }
+
+        #sidebar header {
+            padding: 20px;
+            font-size: 1.5em;
+            text-align: center;
+            border-bottom: 1px solid #0d1b2a;
+        }
+
+        #sidebar nav {
+            flex: 1;
+            padding: 5px;
+        }
+
+        #sidebar nav a {
+            display: flex; /* 保证图标和文字水平排列 */
+            align-items: start;
+            gap: 10px;
+            padding: 10px 6px;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            margin-bottom: 8px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            transition: background-color 0.3s ease;
+        }
+
+        #sidebar nav a:hover {
+            background-color: #0d1b2a;
+        }
+
+        /* 文字部分 */
+        .text {
+            display: inline-block;
+            white-space: nowrap;
+            transition: opacity 0.3s ease;
+        }
+
+        /* 折叠时文字渐隐且不可点击 */
+        #sidebar.collapsed .text {
+            opacity: 0;
+            pointer-events: none;
+            width: 0;
+            overflow: hidden;
+        }
+
+        /* 折叠时导航链接样式 */
+        #sidebar.collapsed nav a {
+            justify-content: center;  /* 图标居中 */
+            padding: 10px 0;          /* 去掉左右内边距 */
+            gap: 0;                   /* 去掉图标和文字间距 */
+        }
+
+
+
+
+
+        #toggleBtn {
+            background-color: #0d1b2a;
+            border: none;
+            color: white;
+            cursor: pointer;
+            padding: 10px;
+            font-size: 1.2em;
+        }
+        #topbar {
+            width: 100%;
+            height: 60px;
+            background: linear-gradient(to right, #0d1b2a, #1b263b);
+            color: #00cfff;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 1em;
+            padding: 0 40px;
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 1000;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.6);
+            font-family: "Microsoft YaHei", sans-serif;
+        }
+
+        .left-tabs {
+            display: flex;
+            gap: 10px;
+        }
+
+        .left-tabs span {
+            margin-right: 20px;
+            padding: 6px 14px;
+            background: rgba(0, 128, 255, 0.2);
+            border: 1px solid #00cfff;
+            border-radius: 8px;
+            color: #00cfff;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .left-tabs span:hover {
+            background: rgba(0, 128, 255, 0.4);
+        }
+
+        .top-title {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 1.6em;
+            font-weight: bold;
+            color: #ffffff;
+            text-shadow: 0 0 6px #00cfff;
+            pointer-events: none; /* 可选：避免遮挡点击 */
+        }
+
+        .right-time {
+            position: absolute;
+            left: 85%;
+            font-size: 1.3em;
+            color: #ffffff;
+            text-shadow: 0 0 6px #00cfff;
+        }
+        .leaflet-tooltip.marker-label {
+            background-color: rgba(0, 0, 0, 0.6);
+            color: white;
+            font-size: 12px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            border: none;
+            white-space: nowrap;
+        }
+
+
+        #container {
+            padding-top: 60px;
+        }
+        /* 中间地图区域 */
+        #main {
+            flex: 1;
+            background-color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+
+        /* 使 main 区域具有定位的能力 */
+        #main {
+            position: relative;  /* 使 #zoomFactor 相对于 #main 定位 */
+            flex: 1;
+            background-color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+
+        /* 地图容器 */
+        #map {
+            width: 100%;
+            height: 100%;
+            border: 2px solid #7f8c8d;
+            border-radius: 8px;
+            box-shadow: 0 0 10px #7f8c8d;
+        }
+
+        /* 3D地图 */
+        #3Dmap {
+            width: 100%;
+            height: 100%;
+        }
+        #zoomFactor {
+            position: absolute;
+            bottom: 10px;        /* 距离底部 10px */
+            left: 10px;          /* 距离左侧 10px */
+            background-color: rgba(0, 0, 0, 0.6);
+            color: white;
+            padding: 5px 10px;
+            font-size: 14px;
+            border-radius: 5px;
+            z-index: 1000;      /* 确保缩放系数显示在其他元素之上 */
+        }
+
+        #infoWindow {
+            position: absolute; /* 固定位置 */
+            top: 20px;  /* 距离上方的距离 */
+            right: 20px; /* 距离右侧的距离 */
+            background-color: rgba(0, 0, 0, 0.7); /* 半透明背景 */
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            width: 220px; /* 控制窗口大小 */
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.6);
+            z-index: 1000; /* 确保窗口在最前面 */
+            display: none; /* 默认隐藏 */
+        }
+
+        #infoWindow h4 {
+            margin: 0;
+            font-size: 16px;
+        }
+
+        #infoWindow p {
+            font-size: 14px;
+            margin-top: 5px;
+        }
+
+        /* 弹窗样式 */
+        #videoModal {
+            display: none;
+            position: fixed;
+            top: 10%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: white;
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            width: 800px;
+        }
+
+        #videoModal video {
+            width: 100%;
+            height: 100%;
+            background: black;
+        }
+
+        #overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 999;
+        }
+
+        #videoModal button {
+            margin-top: 10px;
+        }
+
+    </style>
+</head>
+<body>
+<div id="topbar">
+    <div class="top-title">列车运行安全环境智能监控平台</div>
+    <div class="right-time" id="topTime">2025-07-24 14:18:06</div>
+</div>
+<div id="container">
+    <aside id="sidebar">
+        <nav>
+            <a href="index.html"><span class="icon">🖥️</span><span class="text">首页</span></a>
+            <a href="http://192.168.3.212:10000/#/screen"><span class="icon">🎥</span><span class="text">视频监控</span></a>
+            <a href="../../analysis.html"><span class="icon">📈</span><span class="text">数据分析</span></a>
+            <a href="settings.html"><span class="icon">📝</span><span class="text">消息审核</span></a>
+            <a href="device_manger.html"><span class="icon">🛠️</span><span class="text">设备管理</span></a>
+            <a href="#"><span class="icon">⚙️</span><span class="text">设置</span></a>
+            <a href="help.html"><span class="icon">❓</span><span class="text">帮助</span></a>
+        </nav>
+        <button id="toggleBtn" title="折叠/展开导航栏">></button>
+    </aside>
+
+    <main id="main">
+        <div id="map"></div>
+        <!-- 固定的小窗口 -->
+        <div id="infoWindow" style="display: none;"> <!-- 默认隐藏窗口 -->
+            <p id="infoContent">暂无信息</p>
+        </div>
+    </main>
+</div>
+
+
+<!-- 弹窗 -->
+<div id="overlay"></div>
+<div id="videoModal">
+    <h3>摄像头画面</h3>
+    <video id="video" controls autoplay muted></video>
+    <br />
+    <button onclick="closeModal()">关闭</button>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/blueimp-md5/js/md5.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/flv.js@1.6.2/dist/flv.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
+<script src="./railwayData.js"></script>
+<script>
+
+    const markers = [];
+    const station_markers = [];
+    let scale = 1;
+    // 设备总表
+    const csvUrl = 'http://192.168.0.19:8002/device.csv';
+    //
+    const video_device_Url = 'http://192.168.0.19:8002/video_devices_manager.csv';
+    let groupedData = {};
+    let obs_markers = [];
+
+
+    // 初始化地图，设置中心点和缩放等级
+    const map = L.map('map').setView([22.774425, 108.243963], 14); // 南宁南站
+
+
+
+
+    // 创建并添加缩放系数显示元素到 #main 区域
+    const zoomFactorDiv = document.createElement('div');
+    zoomFactorDiv.id = 'zoomFactor';
+    document.getElementById('main').appendChild(zoomFactorDiv);  // 将元素添加到 #main 区域
+
+    // 更新缩放系数的函数
+    function updateZoomFactor() {
+        const zoomLevel = map.getZoom();  // 获取当前的缩放级别
+        zoomFactorDiv.textContent = `x${zoomLevel}`;
+    }
+
+    // 初始加载时更新一次缩放系数
+    updateZoomFactor();
+
+    // 每次地图缩放结束时更新缩放系数
+    map.on('zoomend', updateZoomFactor);
+
+
+
+    // 添加底图
+    // L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    //
+    //     maxZoom: 18,
+    //     minZoom: 5, // 设置最小缩放等级
+    //     noWrap: true,   // 防止瓦片超出地图边界时重复
+    //     attribution: '© 广西铁翔科技',
+    //
+    // }).addTo(map);
+
+
+    // 添加瓦片地图
+    L.tileLayer(
+        // 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',      //  openstreetmap
+        // 'http://webst02.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=7&x={x}&y={y}&z={z}',  //  Gaodemap
+        'http://192.168.0.19:8002/map/{z}/{x}/{y}.png',   // 谷歌卫星离线地图
+
+        {
+            maxZoom: 18,
+            minZoom: 5, // 设置最小缩放等级
+            // tileSize: 512,  // 调整瓦片的大小
+            noWrap: true,   // 防止瓦片超出地图边界时重复
+            attribution: '© 广西铁翔科技',
+        }
+    ).addTo(map);
+
+    // 加载 GeoJSON（假设文件放在同目录）
+    const customIcon = L.icon({
+        iconUrl: 'station3.png',  // 图标的 URL 地址
+        iconSize: [25, 41],         // 图标大小
+        iconAnchor: [8, 32],       // 图标锚点
+        popupAnchor: [0, -32],      // 弹出框位置
+        shadowUrl: 'marker-shadow.png',    // 阴影（可选）
+        shadowSize: [41, 41],       // 阴影大小（可选）
+        shadowAnchor: [12, 41]      // 阴影锚点（可选）
+    });
+
+    // 加载 GeoJSON 数据并指定自定义图标
+    fetch('GoogleRailwayLine.geojson')
+        .then(response => response.json())
+        .then(data => {
+            L.geoJSON(data, {
+                pointToLayer: function (feature, latlng) {
+                    let currentScale = 1; // 初始缩放系数
+                    let currentIcon = createScaledIcon(currentScale);
+                    // 创建自定义标记
+                    const marker = L.marker(latlng, { icon: currentIcon });
+
+                    marker.bindTooltip(feature.properties.name || '未知', {
+                        permanent: false, // 默认不显示
+                        direction: "top",
+                        offset: [0, -20],
+                        className: "marker-label"
+                    });
+
+                    markers.push(marker); // 保存用于缩放
+                    // 在点击标记时更新固定小窗口的内容并显示
+                    marker.on('click', function() {
+                        const infoContent = `
+                        <h4>站点: ${feature.properties.name || '未知'}</h4>
+                        <p>里程: ${feature.properties.里程 || '未知'}</p>
+                        <p>经度: ${latlng.lng}</p>
+                        <p>纬度: ${latlng.lat}</p>
+                    `;
+
+                        // 显示信息窗口
+                        document.getElementById('infoContent').innerHTML = infoContent;
+                        document.getElementById('infoWindow').style.display = 'block';  // 显示窗口
+                    });
+
+                    return marker;
+                },
+                style: {
+                    color: '#e8f60d',
+                    weight: 6,
+                    opacity: 0.3,
+                    dashArray: '10,4,2,4'
+                }
+            }).addTo(map);
+        })
+        .catch(err => console.error('GeoJSON 加载失败:', err));
+
+
+    // 点击地图其他地方时，隐藏信息窗口
+    map.on('click', function() {
+        document.getElementById('infoWindow').style.display = 'none';  // 隐藏窗口
+    });
+
+    const markerData = [];
+
+
+
+
+
+
+    // 导航栏折叠/展开功能
+    const sidebar = document.getElementById('sidebar');
+    const toggleBtn = document.getElementById('toggleBtn');
+    toggleBtn.addEventListener('click', () => {
+        sidebar.classList.toggle('collapsed');
+        toggleBtn.textContent = sidebar.classList.contains('collapsed') ? '<' : '>>';
+
+        refreshMapSize();
+    });
+
+    // 页面尺寸变化时刷新地图尺寸
+    window.addEventListener('resize', () => {
+        map.invalidateSize();
+    });
+
+    // 地图缩放和移动结束时刷新地图尺寸
+    map.on('zoomend moveend', () => {
+        map.invalidateSize();
+    });
+
+    map.on('zoomend', () => {
+        const zoom = map.getZoom();
+
+        const scale = Math.min(1, Math.pow(zoom / 18, 1));
+
+        const normalIcon = createScaledIcon(scale, 0); // 蓝色
+        const stationIcon = createScaledIcon(scale, 1); // 红色
+
+        if (zoom < 13) {
+            markers.forEach(marker => map.removeLayer(marker));
+            // station_markers.forEach(marker => map.removeLayer(marker));
+        } else {
+            markers.forEach(marker => {
+                if (!map.hasLayer(marker)) map.addLayer(marker);
+                marker.setIcon(normalIcon);
+
+                // 显示或隐藏标签
+                if (zoom >= 16) {
+                    marker.openTooltip();
+                } else {
+                    marker.closeTooltip();
+                }
+            });
+
+            station_markers.forEach(marker => {
+                if (!map.hasLayer(marker)) map.addLayer(marker);
+                // marker.setIcon(stationIcon);
+
+                // 显示或隐藏标签
+                if (zoom >= 15) {
+                    marker.openTooltip();
+                } else {
+                    marker.closeTooltip();
+                }
+            });
+        }
+
+        updateZoomFactor(); // 更新缩放显示（你已有）
+    });
+
+
+
+    //
+    function updateTopTime() {
+        const now = new Date();
+        const formatted = now.toLocaleString('zh-CN', {
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', second: '2-digit',
+            hour12: false
+        }).replace(/\//g, '-');
+        document.getElementById('topTime').textContent = formatted;
+    }
+    updateTopTime();
+    setInterval(updateTopTime, 1000);
+
+    function createScaledIcon(scale, type) {
+        const baseWidth = 25;
+        const baseHeight = 41;
+
+        const width = baseWidth * scale;
+        const height = baseHeight * scale;
+
+        let iconUrl = 'marker-icon.png'; // 默认
+        if (type === 1) {
+            iconUrl = 'marker-icon-red.png'; // 换成别的图标
+        }
+
+        return L.icon({
+            iconUrl: iconUrl,
+            iconSize: [width, height],
+            iconAnchor: [width / 2, height],
+            popupAnchor: [0, -height],
+            shadowUrl: 'marker-shadow.png',
+            shadowSize: [width, height]
+        });
+    }
+
+
+    // 多次延迟刷新地图尺寸函数，避免显示异常
+    function refreshMapSize(times = 3, delay = 30) {
+        if (times <= 0) return;
+        map.invalidateSize();
+        setTimeout(() => refreshMapSize(times - 1, delay), delay);
+    }
+
+    //
+    function loadVideoDevice() {
+        return fetch(video_device_Url)
+            .then(response => {
+                if (!response.ok) throw new Error('网络响应失败');
+                return response.text();
+            })
+            .then(csvText => {
+                const results = Papa.parse(csvText, {
+                    header: true,
+                    skipEmptyLines: true,
+                });
+                const video_devices = results.data;
+                return video_devices;  // ← 返回出去
+
+            })
+    }
+
+    async function getSerialByNameAndId(name, id) {
+        const devices = await loadVideoDevice(); // 异步加载设备列表
+        const match = devices.find(
+            d => d['观测点名称'] === name && d['设备ID'] === id
+        );
+        return match ? match.serial : null;
+    }
+
+    // ✅ 封装加载 CSV 的函数
+    function loadDeviceSidebar() {
+        return fetch(csvUrl)
+            .then(response => {
+                if (!response.ok) throw new Error('网络响应失败');
+                return response.text();
+            })
+            .then(csvText => {
+                const results = Papa.parse(csvText, {
+                    header: true,
+                    skipEmptyLines: true,
+                });
+
+                devices = results.data;
+                groupedData = groupForSidebar(devices); // 你的原有分组逻辑
+
+                const placeMap = new Map();
+
+                devices.forEach(({ 大里程, 小里程, 观测点名称, 设备ID, 设备类型 }) => {
+                    if (!大里程 || !小里程 || !观测点名称) return;
+
+                    const bigMileage = 大里程.toUpperCase();
+                    const mileageStr = `${bigMileage}+${小里程}`;
+                    const name = `${观测点名称}`;
+                    const device_id = 设备ID;
+                    const device_type = 设备类型;
+
+                    const mileage = parseMileage(mileageStr);
+                    const coords = getCoordsByMileage(mileage, railwayData);
+                    if (!coords) return;
+
+                    if (!placeMap.has(name)) {
+                        placeMap.set(name, {
+                            name,
+                            mileageStr,
+                            lon: coords.lon,
+                            lat: coords.lat,
+                            devices: [] // 👈 关键：支持多个设备
+                        });
+                    }
+
+                    // 添加当前设备到该观测点的设备数组中
+                    placeMap.get(name).devices.push({
+                        device_id,
+                        device_type
+                    });
+                });
+
+                const markerData = Array.from(placeMap.values());
+
+                obs_markers = markerData;
+                return markerData;
+            })
+            .catch(error => {
+                console.error('读取或解析 CSV 出错:', error);
+                document.getElementById('sidebarContent').textContent = '加载设备数据失败';
+                return [];
+            });
+    }
+
+
+
+    loadDeviceSidebar().then(data => {
+        console.log('obs_markers:', data);
+        // 这里用 data 或 obs_markers 绘制标记
+        const customIcon2 = L.icon({
+            iconUrl: 'marker-icon-red.png',
+            iconSize: [25, 41],
+            iconAnchor: [12, 41],
+            popupAnchor: [1, -34],
+            shadowUrl: 'marker-shadow.png',
+            shadowSize: [41, 41]
+        });
+
+        data.forEach(loc => {
+            const latlng = L.latLng(loc.lat, loc.lon);
+
+            // 创建自定义标记
+            const marker = L.marker(latlng, { icon: customIcon2 }).addTo(map);
+            station_markers.push(marker);
+            //
+            marker.bindTooltip(loc.name, {
+                permanent: false, // 默认不显示，等 zoom=16 时再显示
+                direction: "top",
+                offset: [0, -20],
+                className: "marker-label"
+            });
+
+            // const deviceButtonHtml = `<button onclick="loginAndPlay('${loc.name}', '${loc.device_id}')">${loc.device_id}</button>`;/**/
+            const deviceButtonHtml = loc.devices.map(dev =>
+                `<button onclick="loginAndPlay('${loc.name}', '${dev.device_id}')">${dev.device_id}</button>`
+            ).join(' ');
+            console.log(deviceButtonHtml);
+            // 点击标记时更新页面固定信息窗口
+            marker.on('click', () => {
+                const infoContent = `
+            <h4>站点: ${loc.name || '未知'}</h4>
+            <p>里程: ${loc.mileageStr || '未知'}</p>
+            <p>经度: ${latlng.lng}</p>
+            <p>纬度: ${latlng.lat}</p>
+            <p>设备: ${deviceButtonHtml}</p>
+        `;
+
+                document.getElementById('infoContent').innerHTML = infoContent;
+                document.getElementById('infoWindow').style.display = 'block';
+            });
+        });
+    });
+
+    // const obs_markers2 = loadDeviceSidebar();
+    // console.log('obs_markers:',obs_markers2)
+
+    function groupForSidebar(devices) {
+        const grouped = {};
+        devices.forEach(({ 大里程, 小里程, 观测点名称, 设备ID }) => {
+            if (!大里程 || !小里程 || !观测点名称 || !设备ID) return; // 跳过无效数据
+
+            // 统一大里程格式，去掉多余空格，转成大写
+            const mileage = 大里程.trim().toUpperCase();
+
+            // 统一小里程和观测点名称格式
+            const subMileage = 小里程.trim();
+            const stationName = 观测点名称.trim();
+
+            // 组装站点标签
+            const stationLabel = `${stationName} (${mileage}+${subMileage})`;
+
+            if (!grouped[mileage]) grouped[mileage] = {};
+            if (!grouped[mileage][stationLabel]) grouped[mileage][stationLabel] = [];
+
+            grouped[mileage][stationLabel].push(设备ID.trim());
+        });
+        return grouped;
+    }
+
+
+    function parseMileage(kmStr) {
+        const match = /^K(\d+)(?:\+(\d+))?$/.exec(kmStr.trim().toUpperCase()); // 👈 增加 .toUpperCase()
+        if (!match) {
+            throw new Error(`无效的里程格式: ${kmStr}`);
+        }
+        const km = parseInt(match[1], 10);
+        const m = parseInt(match[2] || "0", 10);
+        return km * 1000 + m;
+    }
+
+    function getCoordsByMileage(mileage, railwayData) {
+        let before = null, after = null;
+
+        for (let i = 0; i < railwayData.length; i++) {
+            const point = railwayData[i];
+            if (point.mileage <= mileage) before = point;
+            if (point.mileage >= mileage) {
+                after = point;
+                break;
+            }
+        }
+
+        if (!before || !after) return null;
+
+        // 插值
+        if (before.mileage === after.mileage) {
+            return { lon: before.lon, lat: before.lat };
+        }
+
+        const ratio = (mileage - before.mileage) / (after.mileage - before.mileage);
+        const lon = before.lon + ratio * (after.lon - before.lon);
+        const lat = before.lat + ratio * (after.lat - before.lat);
+        return { lon, lat };
+    }
+
+
+    const serverIP = "192.168.3.212";
+    const serverPort = "10000";
+    const username = "admin";
+    const password = "admin@2024";
+
+
+
+    // 登录配置（你需要定义这些变量：serverIP, serverPort, username, password）
+    let cachedToken = null;
+    let tokenTimestamp = 0;
+    const TOKEN_TTL = 1000 * 60 * 30; // Token有效期：30分钟（你可以根据实际情况修改）
+
+    // 登录一次，缓存 token
+    async function loginOnce() {
+        const now = Date.now();
+        if (cachedToken && (now - tokenTimestamp) < TOKEN_TTL) {
+            return cachedToken; // 有效 token，直接返回
+        }
+
+        const passwordMd5 = md5(password); // 密码加密
+        const loginResp = await fetch(`http://${serverIP}:${serverPort}/api/v1/login`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                username,
+                password: passwordMd5,
+                url_token_only: true
+            })
+        });
+
+        const loginData = await loginResp.json();
+        console.log("登录响应：", loginData);
+
+        if (!loginData.URLToken) {
+            alert("登录失败：未获取到 token");
+            throw new Error("登录失败");
+        }
+
+        cachedToken = loginData.URLToken;
+        tokenTimestamp = now;
+        return cachedToken;
+    }
+
+
+
+    async function loginAndPlay(name, id) {
+        try {
+            console.log('调用 loginAndPlay()', name, id);
+
+            const token = await loginOnce(); // 登录一次
+            const serial = await getSerialByNameAndId(name, id);
+
+            if (!serial) {
+                alert("未找到匹配的设备");
+                return;
+            }
+
+            console.log("使用这个 serial:", serial);
+
+            const streamResp = await fetch(`http://${serverIP}:${serverPort}/api/v1/stream/start?serial=${serial}&channel=1&token=${token}`);
+            const streamData = await streamResp.json();
+            console.log("流地址响应：", streamData);
+
+            if (!streamData || !streamData.WS_FLV) {
+                alert("未获取到播放地址");
+                return;
+            }
+
+            const flvUrl = streamData.WS_FLV + `?token=${token}`;
+            openModalWithVideo(flvUrl);
+
+        } catch (error) {
+            console.error("播放视频失败：", error);
+            alert("视频播放失败：" + error.message);
+        }
+    }
+
+
+
+
+
+
+
+
+
+    // async function loginAndPlay(name, id) {
+    //
+    //     console.log('调用 loginAndPlay()', name, id);
+    //     // APi登录，获取Token
+    //     const passwordMd5 = md5(password); // 动态加密
+    //     const loginResp = await fetch(`http://${serverIP}:${serverPort}/api/v1/login`, {
+    //         method: "POST",
+    //         headers: { "Content-Type": "application/json" },
+    //         body: JSON.stringify({
+    //             username,
+    //             password: passwordMd5,
+    //             url_token_only: true
+    //         })
+    //     });
+    //
+    //     const loginData = await loginResp.json();
+    //     console.log("登录响应：", loginData);
+    //
+    //     const token = loginData.URLToken;
+    //     if (!token) {
+    //         alert("登录失败：未获取到 token");
+    //         return;
+    //     }
+    //
+    //     const serial = await getSerialByNameAndId(name, id);
+    //     if (serial) {
+    //         console.log("使用这个 serial:", serial);
+    //         // 获取流播放地址
+    //         const streamResp = await fetch(`http://${serverIP}:${serverPort}/api/v1/stream/start?serial=${serial}&channel=1&token=${token}`);
+    //         const streamData = await streamResp.json();
+    //         console.log("流地址响应：", streamData);
+    //
+    //         if (!streamData || !streamData.WS_FLV) {
+    //             alert("未获取到播放地址");
+    //             return;
+    //         }
+    //         const flvUrl = streamData.WS_FLV + `?token=${token}`;
+    //         openModalWithVideo(flvUrl);
+    //     } else {
+    //         alert("未找到匹配的设备");
+    //     }
+    //
+    // }
+
+    // 播放视频并打开弹窗
+    function openModalWithVideo(flvUrl) {
+        const videoElement = document.getElementById("video");
+        document.getElementById("videoModal").style.display = "block";
+        document.getElementById("overlay").style.display = "block";
+
+        if (flvjs.isSupported()) {
+            if (window.flvPlayer) {
+                window.flvPlayer.destroy();
+            }
+            window.flvPlayer = flvjs.createPlayer({
+                type: "flv",
+                url: flvUrl
+            });
+            window.flvPlayer.attachMediaElement(videoElement);
+            window.flvPlayer.load();
+            window.flvPlayer.play();
+        } else {
+            alert("浏览器不支持 FLV.js");
+        }
+    }
+
+    // 关闭弹窗并停止播放
+    function closeModal() {
+        document.getElementById("videoModal").style.display = "none";
+        document.getElementById("overlay").style.display = "none";
+
+        if (window.flvPlayer) {
+            window.flvPlayer.destroy();
+            window.flvPlayer = null;
+        }
+    }
+
+
+</script>
+</body>
+</html>

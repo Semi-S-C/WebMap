@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>RainViewer 雷达图动画</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <style>
+        #map { height: 100vh; }
+        .controls {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 1000;
+            background: white;
+            padding: 8px;
+            border-radius: 6px;
+            box-shadow: 0 0 6px rgba(0, 0, 0, 0.2);
+        }
+        button {
+            margin: 4px 0;
+            width: 100px;
+        }
+    </style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<!-- 控制按钮 -->
+<div class="controls">
+    <button id="toggleLayerBtn">隐藏图层</button><br>
+    <button id="togglePlayBtn">暂停播放</button>
+</div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script>
+    const map = L.map("map").setView([34.3, 108.9], 6); // 西安中心
+
+    // // 添加底图
+    // L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    //     attribution: '&copy; OpenStreetMap contributors'
+    // }).addTo(map);
+
+
+    // 添加谷歌地图瓦片图层
+    L.tileLayer(
+        // 'http://webst02.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=7&x={x}&y={y}&z={z}',
+        'http://192.168.0.19:8001/{z}/{x}/{y}.png',
+
+        {
+            maxZoom: 18,
+            minZoom: 5, // 设置最小缩放等级
+            // tileSize: 512,  // 调整瓦片的大小
+            noWrap: true,   // 防止瓦片超出地图边界时重复
+            attribution: '© 广西铁翔科技',
+        }
+    ).addTo(map);
+
+    // RainViewer 图层播放逻辑
+    let radarLayers = [];
+    let animationFrames = [];
+    let currentFrame = 0;
+    let animationTimer = null;
+    let layerVisible = true;
+    let playing = true;
+
+    // 获取雷达时间戳列表
+    fetch("https://tilecache.rainviewer.com/api/maps.json")
+        .then(res => res.json())
+        .then(timestamps => {
+            animationFrames = timestamps.slice(-20); // 最近 10 帧
+
+            animationFrames.forEach((ts, index) => {
+                let layer = L.tileLayer(`https://tilecache.rainviewer.com/v2/radar/${ts}/256/{z}/{x}/{y}/2/1_1.png`, {
+                    opacity: 0.6,
+                    zIndex: 10,
+                });
+                radarLayers.push(layer);
+            });
+
+            // 初始化第一帧
+            radarLayers[0].addTo(map);
+            playAnimation();
+        });
+
+    function showFrame(index) {
+        if (!layerVisible) return;
+        radarLayers.forEach(layer => map.removeLayer(layer));
+        radarLayers[index].addTo(map);
+    }
+
+    function playAnimation() {
+        animationTimer = setInterval(() => {
+            showFrame(currentFrame);
+            currentFrame = (currentFrame + 1) % radarLayers.length;
+        }, 600);
+    }
+
+    function stopAnimation() {
+        clearInterval(animationTimer);
+    }
+
+    // 播放 / 暂停按钮
+    document.getElementById("togglePlayBtn").addEventListener("click", () => {
+        playing = !playing;
+        if (playing) {
+            playAnimation();
+            document.getElementById("togglePlayBtn").innerText = "暂停播放";
+        } else {
+            stopAnimation();
+            document.getElementById("togglePlayBtn").innerText = "播放动画";
+        }
+    });
+
+    // 图层显示 / 隐藏按钮
+    document.getElementById("toggleLayerBtn").addEventListener("click", () => {
+        layerVisible = !layerVisible;
+        radarLayers.forEach(layer => map.removeLayer(layer));
+        if (layerVisible) {
+            radarLayers[currentFrame].addTo(map);
+            document.getElementById("toggleLayerBtn").innerText = "隐藏图层";
+        } else {
+            document.getElementById("toggleLayerBtn").innerText = "显示图层";
+        }
+    });
+</script>
+</body>
+</html>

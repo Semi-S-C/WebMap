@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <title>高德地图瓦片示例 - Leaflet</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body, html {
+      margin: 0; padding: 0; height: 100vh; font-family: Arial, sans-serif;
+      background-color: #f0f0f0;
+    }
+    #map {
+      width: 100vw;
+      height: 100vh;
+      margin: 0 auto;
+      /*border: 2px solid #333;*/  // 边框
+    }
+  </style>
+</head>
+<body>
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  // 初始化地图，设置中心点和缩放等级
+  const map = L.map('map').setView([22.774425, 108.243963], 14); // 南宁南站
+  // 添加地图瓦片图层
+  L.tileLayer(
+          // 'http://webst02.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=6&x={x}&y={y}&z={z}',
+          // 'http://t0.tianditu.gov.cn/img_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=img&STYLE=default&TILEMATRIXSET=w&FORMAT=tiles&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&tk=62dc8bc7e7eb958528502a3c3cbd4536',
+          // 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',      //  openstreetmap
+          'http://192.168.2.31:30358/map/{z}/{x}/{y}.png',   // 谷歌卫星离线地图
+          // 'http://t0.tianditu.gov.cn/img_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=img&STYLE=default&TILEMATRIXSET=w&FORMAT=tiles&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&tk=62dc8bc7e7eb958528502a3c3cbd4536',
+          // 'http://t0.tianditu.gov.cn/cva_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=cva&STYLE=default&TILEMATRIXSET=w&FORMAT=tiles&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&tk=62dc8bc7e7eb958528502a3c3cbd4536',
+
+
+  {
+    maxZoom: 18,
+    minZoom: 5,
+    attribution: '© 高德地图'
+  }).addTo(map);
+
+  // L.tileLayer(
+  //         // 'http://t0.tianditu.gov.cn/cva_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=cva&STYLE=default&TILEMATRIXSET=w&FORMAT=tiles&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&tk=62dc8bc7e7eb958528502a3c3cbd4536',
+  //         // 'http://t0.tianditu.gov.cn/cia_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=cia&STYLE=default&TILEMATRIXSET=w&FORMAT=tiles&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&tk=62dc8bc7e7eb958528502a3c3cbd4536',
+  // ).addTo(map);
+  //
+
+
+  fetch('GoogleRailwayLine.geojson')
+          .then(response => response.json())
+          .then(data => {
+            // 先提取线数据
+            const lineFeatures = data.features.filter(f => f.geometry.type === 'LineString' || f.geometry.type === 'MultiLineString');
+            const pointFeatures = data.features.filter(f => f.geometry.type === 'Point');
+
+            // 画线路
+            L.geoJSON({ type: 'FeatureCollection', features: lineFeatures }, {
+              style: {
+                color: '#e6fb59',   //  #0c1f6b
+                weight: 6,
+                opacity: 0.3,
+                dashArray: '10,4,2,4'
+              }
+            }).addTo(map);
+
+            // 画站点（点）
+            L.geoJSON({ type: 'FeatureCollection', features: pointFeatures }, {
+              pointToLayer: function (feature, latlng) {
+                const marker = L.circleMarker(latlng, {
+                  radius: 6,
+                  color: '#248929',
+                  weight: 2,
+                  fillColor: '#248929',
+                  fillOpacity: 0.8
+                });
+                marker.bindTooltip(feature.properties.name || '未知', {
+                  permanent: false,
+                  direction: "top",
+                  offset: [0, -20],
+                  className: "marker-label"
+                });
+                marker.on('click', function() {
+                  const infoContent = `
+            <h4>站点: ${feature.properties.name || '未知'}</h4>
+            <p>里程: ${feature.properties.里程 || '未知'}</p>
+            <p>经度: ${latlng.lng}</p>
+            <p>纬度: ${latlng.lat}</p>
+          `;
+                  document.getElementById('infoContent').innerHTML = infoContent;
+                  document.getElementById('infoWindow').style.display = 'block';
+                });
+                return marker;
+              }
+            }).addTo(map);
+          })
+          .catch(err => console.error('GeoJSON 加载失败:', err));
+
+</script>
+</body>
+</html>

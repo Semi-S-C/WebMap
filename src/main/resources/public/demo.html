@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8" />
+    <title>主页</title>
+    <link
+            rel="stylesheet"
+            href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    />
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body, html {
+            margin: 0; padding: 0; height: 100vh; font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+        }
+        #container {
+            display: flex;
+            height: 100vh;
+            width: 100vw;
+        }
+        /* 左侧导航栏 */
+        #sidebar {
+            width: 130px;
+            background-color: #0d1b2a;
+            color: white;
+            transition: width 0.3s ease;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #sidebar.collapsed {
+            width: 50px; /* 统一折叠宽度 */
+        }
+
+        #sidebar header {
+            padding: 20px;
+            font-size: 1.5em;
+            text-align: center;
+            border-bottom: 1px solid #0d1b2a;
+        }
+
+        #sidebar nav {
+            flex: 1;
+            padding: 5px;
+        }
+
+        #sidebar nav a {
+            display: flex; /* 保证图标和文字水平排列 */
+            align-items: start;
+            gap: 10px;
+            padding: 10px 6px;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            margin-bottom: 8px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            transition: background-color 0.3s ease;
+        }
+
+        #sidebar nav a:hover {
+            background-color: #0d1b2a;
+        }
+
+        /* 文字部分 */
+        .text {
+            display: inline-block;
+            white-space: nowrap;
+            transition: opacity 0.3s ease;
+        }
+
+        /* 折叠时文字渐隐且不可点击 */
+        #sidebar.collapsed .text {
+            opacity: 0;
+            pointer-events: none;
+            width: 0;
+            overflow: hidden;
+        }
+
+        /* 折叠时导航链接样式 */
+        #sidebar.collapsed nav a {
+            justify-content: center;  /* 图标居中 */
+            padding: 10px 0;          /* 去掉左右内边距 */
+            gap: 0;                   /* 去掉图标和文字间距 */
+        }
+
+
+
+
+
+        #toggleBtn {
+            background-color: #0d1b2a;
+            border: none;
+            color: white;
+            cursor: pointer;
+            padding: 10px;
+            font-size: 1.2em;
+        }
+        #topbar {
+            width: 100%;
+            height: 60px;
+            background: linear-gradient(to right, #0d1b2a, #1b263b);
+            color: #00cfff;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 1em;
+            padding: 0 40px;
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 1000;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.6);
+            font-family: "Microsoft YaHei", sans-serif;
+        }
+
+        .left-tabs {
+            display: flex;
+            gap: 10px;
+        }
+
+        .left-tabs span {
+            margin-right: 20px;
+            padding: 6px 14px;
+            background: rgba(0, 128, 255, 0.2);
+            border: 1px solid #00cfff;
+            border-radius: 8px;
+            color: #00cfff;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .left-tabs span:hover {
+            background: rgba(0, 128, 255, 0.4);
+        }
+
+        .top-title {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 1.6em;
+            font-weight: bold;
+            color: #ffffff;
+            text-shadow: 0 0 6px #00cfff;
+            pointer-events: none; /* 可选：避免遮挡点击 */
+        }
+
+        .right-time {
+            position: absolute;
+            left: 85%;
+            font-size: 1.3em;
+            color: #ffffff;
+            text-shadow: 0 0 6px #00cfff;
+        }
+
+        #container {
+            padding-top: 60px;
+        }
+        /* 中间地图区域 */
+        #main {
+            flex: 1;
+            background-color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+
+        /* 使 main 区域具有定位的能力 */
+        #main {
+            position: relative;  /* 使 #zoomFactor 相对于 #main 定位 */
+            flex: 1;
+            background-color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+
+        /* 地图容器 */
+        #map {
+            width: 100%;
+            height: 100%;
+            border: 2px solid #7f8c8d;
+            border-radius: 8px;
+            box-shadow: 0 0 10px #7f8c8d;
+        }
+
+        /* 3D地图 */
+        #3Dmap {
+            width: 100%;
+            height: 100%;
+        }
+        #zoomFactor {
+            position: absolute;
+            bottom: 10px;        /* 距离底部 10px */
+            left: 10px;          /* 距离左侧 10px */
+            background-color: rgba(0, 0, 0, 0.6);
+            color: white;
+            padding: 5px 10px;
+            font-size: 14px;
+            border-radius: 5px;
+            z-index: 1000;      /* 确保缩放系数显示在其他元素之上 */
+        }
+
+        #infoWindow {
+            position: absolute; /* 固定位置 */
+            top: 20px;  /* 距离上方的距离 */
+            right: 20px; /* 距离右侧的距离 */
+            background-color: rgba(0, 0, 0, 0.7); /* 半透明背景 */
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            width: 220px; /* 控制窗口大小 */
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.6);
+            z-index: 1000; /* 确保窗口在最前面 */
+            display: none; /* 默认隐藏 */
+        }
+
+        #infoWindow h4 {
+            margin: 0;
+            font-size: 16px;
+        }
+
+        #infoWindow p {
+            font-size: 14px;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+<div id="topbar">
+    <div class="top-title">列车运行安全环境智能监控平台</div>
+    <div class="right-time" id="topTime">2025-07-24 14:18:06</div>
+</div>
+<div id="container">
+    <aside id="sidebar">
+        <nav>
+            <a href="device-manager/public/index.html"><span class="icon">🖥️</span><span class="text">首页</span></a>
+            <a href="monitor.html"><span class="icon">🎥</span><span class="text">视频监控</span></a>
+            <a href="analysis.html"><span class="icon">📈</span><span class="text">数据分析</span></a>
+            <a href="settings.html"><span class="icon">📝</span><span class="text">消息审核</span></a>
+            <a href="device-management.html"><span class="icon">🛠️</span><span class="text">设备管理</span></a>
+            <a href="#"><span class="icon">⚙️</span><span class="text">设置</span></a>
+            <a href="help.html"><span class="icon">❓</span><span class="text">帮助</span></a>
+        </nav>
+        <button id="toggleBtn" title="折叠/展开导航栏">></button>
+    </aside>
+
+    <main id="main">
+        <div id="map"></div>
+        <!-- 固定的小窗口 -->
+        <div id="infoWindow" style="display: none;"> <!-- 默认隐藏窗口 -->
+            <p id="infoContent">暂无信息</p>
+        </div>
+    </main>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+    // 多次延迟刷新地图尺寸函数，避免显示异常
+    function refreshMapSize(times = 3, delay = 30) {
+        if (times <= 0) return;
+        map.invalidateSize();
+        setTimeout(() => refreshMapSize(times - 1, delay), delay);
+    }
+
+    // 初始化地图，设置中心点和缩放等级
+    const map = L.map('map').setView([22.774425, 108.243963], 14); // 南宁南站
+
+
+
+    // 创建并添加缩放系数显示元素到 #main 区域
+    const zoomFactorDiv = document.createElement('div');
+    zoomFactorDiv.id = 'zoomFactor';
+    document.getElementById('main').appendChild(zoomFactorDiv);  // 将元素添加到 #main 区域
+
+    // 更新缩放系数的函数
+    function updateZoomFactor() {
+        const zoomLevel = map.getZoom();  // 获取当前的缩放级别
+        zoomFactorDiv.textContent = `x${zoomLevel}`;
+    }
+
+    // 初始加载时更新一次缩放系数
+    updateZoomFactor();
+
+    // 每次地图缩放结束时更新缩放系数
+    map.on('zoomend', updateZoomFactor);
+
+
+    // 添加高德地图瓦片图层
+    L.tileLayer(
+        // 'http://webst02.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=7&x={x}&y={y}&z={z}',
+        'http://192.168.0.19:8001/{z}/{x}/{y}.png',
+
+        {
+            maxZoom: 18,
+            minZoom: 5, // 设置最小缩放等级
+            // tileSize: 512,  // 调整瓦片的大小
+            noWrap: true,   // 防止瓦片超出地图边界时重复
+            attribution: '© 广西铁翔科技',
+        }
+    ).addTo(map);
+
+
+
+    // L.tileLayer(
+    //     'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+    //     {
+    //         maxZoom: 20,
+    //         minZoom: 12,
+    //         attribution: '© Google Maps',
+    //     }
+    // ).addTo(map);
+
+    // 加载 GeoJSON（假设文件放在同目录）
+    const customIcon = L.icon({
+        iconUrl: 'station3.png',  // 图标的 URL 地址
+        iconSize: [25, 41],         // 图标大小
+        iconAnchor: [8, 32],       // 图标锚点
+        popupAnchor: [0, -32],      // 弹出框位置
+        shadowUrl: 'marker-shadow.png',    // 阴影（可选）
+        shadowSize: [41, 41],       // 阴影大小（可选）
+        shadowAnchor: [12, 41]      // 阴影锚点（可选）
+    });
+
+    // 加载 GeoJSON 数据并指定自定义图标
+    fetch('GoogleRailwayLine.geojson')
+        .then(response => response.json())
+        .then(data => {
+            L.geoJSON(data, {
+                pointToLayer: function (feature, latlng) {
+                    // 创建自定义标记
+                    const marker = L.marker(latlng, { icon: customIcon });
+                    // 在点击标记时更新固定小窗口的内容并显示
+                    marker.on('click', function() {
+                        const infoContent = `
+                        <h4>站点: ${feature.properties.name || '未知'}</h4>
+                        <p>里程: ${feature.properties.里程 || '未知'}</p>
+                        <p>经度: ${latlng.lng}</p>
+                        <p>纬度: ${latlng.lat}</p>
+                    `;
+
+                        // 显示信息窗口
+                        document.getElementById('infoContent').innerHTML = infoContent;
+                        document.getElementById('infoWindow').style.display = 'block';  // 显示窗口
+                    });
+
+                    return marker;
+                },
+                style: {
+                    color: '#e8f60d',
+                    weight: 5,
+                    opacity: 0.9,
+                    dashArray: '10,4,2,4'
+                }
+            }).addTo(map);
+        })
+        .catch(err => console.error('GeoJSON 加载失败:', err));
+
+
+    // 点击地图其他地方时，隐藏信息窗口
+    map.on('click', function() {
+        document.getElementById('infoWindow').style.display = 'none';  // 隐藏窗口
+    });
+
+
+
+
+    const markerData = [
+        {
+            name: "K8+752～+800(羽四嶺隧道）",
+            lon: 108.271942,
+            lat: 22.726814
+        },
+        {
+            name: "K58+502(火炭岭隧道北头)",
+            lon: 108.41925,
+            lat: 22.393368
+        },
+        {
+            name: "K59+777（狮子尾1号隧道北头）",
+            lon: 108.429832,
+            lat: 22.387316
+        },
+        {
+            name: "K60+040～+120(狮子尾1号隧道南头)",
+            lon: 108.432709,
+            lat: 22.384842
+        },
+        {
+            name: "K60+680（三甲隧道北头）",
+            lon: 108.436302,
+            lat: 22.382336
+        }
+        // 可以继续添加更多点
+    ];
+
+    // 创建标记
+    const markers = markerData.map(loc => ({
+        coords: [loc.lat, loc.lon], // 经纬度顺序为 [lat, lon]
+        popup: `
+        <div style="text-align: center; font-size: 16px;">
+            📍 <a href="ObservationPointDetails.html" target="_blank" style="color:#00cfff; text-decoration:none;">${loc.name}</a>
+        </div>
+        <div>经度：${loc.lon}&nbsp;&nbsp;纬度：${loc.lat}</div>
+    `
+    }));
+
+    console.log(markers);  // 检查生成的 markers 数组
+
+
+
+    // popup: `
+    //     <div style="text-align: center; font-size: 15px;font-weight: bold;">📍${loc.name}</div>
+    //     <div>经度：${loc.coords[1]}&nbsp;&nbsp;纬度：${loc.coords[0]}</div>
+    // `
+
+
+
+
+
+    const redIcon = L.icon({
+        iconUrl: 'marker-icon-red.png',
+        iconSize: [25, 41],
+        iconAnchor: [12, 41],
+        popupAnchor: [1, -34],
+        shadowUrl: 'marker-shadow.png',
+        shadowSize: [41, 41]
+    });
+
+    markers.forEach(marker => {
+        L.marker(marker.coords,{ icon: redIcon })
+            .addTo(map)
+            .bindPopup(marker.popup);
+    });
+    //
+
+
+    // 导航栏折叠/展开功能
+    const sidebar = document.getElementById('sidebar');
+    const toggleBtn = document.getElementById('toggleBtn');
+    toggleBtn.addEventListener('click', () => {
+        sidebar.classList.toggle('collapsed');
+        toggleBtn.textContent = sidebar.classList.contains('collapsed') ? '<' : '>>';
+
+        refreshMapSize();
+    });
+
+    // 页面尺寸变化时刷新地图尺寸
+    window.addEventListener('resize', () => {
+        map.invalidateSize();
+    });
+
+    // 地图缩放和移动结束时刷新地图尺寸
+    map.on('zoomend moveend', () => {
+        map.invalidateSize();
+    });
+
+    //
+    function updateTopTime() {
+        const now = new Date();
+        const formatted = now.toLocaleString('zh-CN', {
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', second: '2-digit',
+            hour12: false
+        }).replace(/\//g, '-');
+        document.getElementById('topTime').textContent = formatted;
+    }
+    updateTopTime();
+    setInterval(updateTopTime, 1000);
+
+
+
+    // 实时更新时间
+    const timeDisplay = document.getElementById('timeDisplay');
+    function updateTime() {
+        const now = new Date();
+        const formatted = now.toLocaleString('zh-CN', { hour12: false });
+        timeDisplay.textContent = `当前时间：${formatted}`;
+    }
+    updateTime();
+    setInterval(updateTime, 1000);
+</script>
+</body>
+</html>
